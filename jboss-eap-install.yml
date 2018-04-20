@@ -1,0 +1,95 @@
+---
+- hosts: jboss-eap
+  remote_user: root
+  become_method: sudo
+  tasks:
+
+    - name: check if /opt/jbcs-httpd exists
+      stat:
+        path: /opt/jbcs-httpd
+      register: jbcs_httpd
+
+    - name: check if /opt/jbcs-httpd/httpd/conf/httpd.conf exists
+      stat:
+        path: /opt/jbcs-httpd/httpd/conf/httpd.conf
+      register: jbcs_httpd_conf
+
+    - name: rename jbcs
+      command: mv /opt/jbcs-httpd24-2.4 /opt/jbcs-httpd
+      when: jbcs_httpd.stat.exists == False
+
+    - name: Copy over clustering resources
+      unarchive:
+         src: eap7.tgz
+         dest: /tmp/
+
+    - name: complete jbcs-httpd postinstall
+      command: ./.postinstall
+      args:
+        chdir: /opt/jbcs-httpd/httpd/
+      when: jbcs_httpd_conf.stat.exists == True
+    - name: Delete stock jbcs-httpd files to avoid confusion
+      file:
+        path: "{{ item }}"
+        state: absent
+      with_items:
+        - /opt/jbcs-httpd/httpd/conf/httpd.conf
+        - /opt/jbcs-httpd/sbin/apachectl
+
+    - name: Copy custom httpd files for clustering from /tmp
+      copy:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        remote_src: yes
+      with_items: 
+        - { src: '/tmp/httpd/conf/cluster1.conf', dest: '/opt/jbcs-httpd/httpd/conf/cluster1.conf' }
+        - { src: '/tmp/httpd/conf/cluster2.conf', dest: '/opt/jbcs-httpd/httpd/conf/cluster2.conf' }
+        - { src: '/tmp/httpd/apachectl', dest: '/opt/jbcs-httpd/httpd/sbin/apachectl' }
+#        - { src: '/dir', dest: '/opt/dir' }
+
+    - name: init postgresql
+      command: service postgresql initdb
+      ignore_errors: yes
+
+    - name: replace listen_address 
+      lineinfile: 
+        path: /var/lib/pgsql/data/postgresql.conf
+        state: present
+        line: 'listen_addresses = "*"'
+
+    - name: Turn on XA Transaction support 
+      lineinfile: 
+        path: /var/lib/pgsql/data/postgresql.conf
+        line: 'max_prepared_transactions = 100'
+        state: present 
+
+    - name: Allow password auth within local network 
+      lineinfile: 
+        path: /var/lib/pgsql/data/pg_hba.conf
+        regexp: ''
+        insertafter: EOF 
+        line: "host     all     all     192.168.1.0/24  password"
+
+    - name: start postgresql 
+      service:
+        name: postgresql
+        state: started
+        enabled: true
+
+
+    - name: add postgres user
+      become: yes
+      become_user: postgres
+      postgresql_user:
+        name: jboss
+        password: password
+
+    - name: add postgresql db
+      become: yes
+      become_user: postgres
+      postgresql_db:
+        name: eap7
+        owner: jboss
+
+#runcommand: #!/bin/sh export CLUSTER_NUM=1 /opt/jbcs-httpd/httpd/sbin/apachectl $@
+

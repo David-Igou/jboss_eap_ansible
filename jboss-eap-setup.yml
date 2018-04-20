@@ -1,0 +1,117 @@
+#David Igou <digou@redhat.com>
+#This is an initial configuration playbook to be ran after provisioning with basic access after copying ssh keys.
+---
+- hosts: jboss-eap
+  remote_user: root
+
+  tasks:
+    ## This is a bandaid because registering file names leads to ansible interpreting the - and . as instructions..
+    - name: check if files already exist
+      stat: 
+        path: /opt/jbcs-httpd24-2.4
+      register: jbcs_httpd
+
+    - name: check if files already exist
+      stat: 
+        path: /opt/jboss-eap-7.0
+      register: jboss_eap_7_0
+
+    - name: check if files already exist
+      stat: 
+        path: /opt/jboss-eap-7.0_active
+      register: jboss_eap_7_0_active
+
+    - name: check if files already exist
+      stat: 
+        path: /opt/jboss-eap-7.0-passive
+      register: jboss_eap_7_0_passive
+
+    - name: Disable password auth
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^PasswordAuthentication'
+        line: 'PasswordAuthentication no'
+
+    - name: Restart sshd
+      service: 
+        name: sshd
+        state: restarted
+
+    - name: install rpms necessary
+      yum:
+        name: "{{ item }}"
+        state: latest
+      with_items:
+        - unzip
+        - postgresql-server
+        - firewalld
+        - python-psycopg2
+
+    - name: start/enable firewalld
+      service:
+        name: firewalld
+        state: started
+        enabled: true
+
+    - firewalld:
+        rich_rule: 'rule family=ipv4 source address="192.168.1.0/24" port port=81 protocol=tcp accept'
+        permanent: true
+        state: enabled
+        zone: public
+
+    - firewalld:
+        service: "{{ item }}"
+        permanent: true
+        state: enabled
+        zone: public
+      with_items:
+        - ssh
+        - http
+
+    - command: firewall-cmd --reload
+
+    - name: install jboss apache thing
+      unarchive: 
+         src: jbcs-httpd24-httpd-2.4.6-RHEL7-x86_64.zip
+         dest: /opt/
+      when: jbcs_httpd.stat.isdir == False
+
+    - name: Install jboss-eap to /opt/ - Then make two copies for eap clustering 
+      unarchive:
+         src: jboss-eap-7.0.0.zip
+         dest: /opt/
+      when: jboss_eap_7_0.stat.isdir == False
+
+    - command: cp -R /opt/jboss-eap-7.0/ /opt/jboss-eap-7.0_active
+      when: jboss_eap_7_0_active.stat.isdir == False
+
+    - command: mv /opt/jboss-eap-7.0/ /opt/jboss-eap-7.0_passive
+      when: jboss_eap_7_0_passive.stat.isdir == False
+
+    - name: add apache group
+      group:
+        name: apache
+        state: present
+        gid: 48
+
+    - name: add apache user
+      user:
+        name: apache
+        comment: Apache
+        uid: 48
+        group: apache
+        shell: /bin/sh
+
+    - name: set ownership of httpd files
+      file:
+        path: /opt/jbcs-httpd24-2.4/httpd/
+        owner: apache
+        group: apache
+        recurse: yes
+
+    - seboolean:
+        name: httpd_can_network_connect
+        state: yes
+        persistent: yes
+
+
