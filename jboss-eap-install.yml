@@ -28,6 +28,7 @@
       args:
         chdir: /opt/jbcs-httpd/httpd/
       when: jbcs_httpd_conf.stat.exists == True
+
     - name: Delete stock jbcs-httpd files to avoid confusion
       file:
         path: "{{ item }}"
@@ -41,7 +42,7 @@
         src: "{{ item.src }}"
         dest: "{{ item.dest }}"
         remote_src: yes
-      with_items: 
+      with_items:
         - { src: '/tmp/httpd/conf/cluster1.conf', dest: '/opt/jbcs-httpd/httpd/conf/cluster1.conf' }
         - { src: '/tmp/httpd/conf/cluster2.conf', dest: '/opt/jbcs-httpd/httpd/conf/cluster2.conf' }
         - { src: '/tmp/httpd/apachectl', dest: '/opt/jbcs-httpd/httpd/sbin/apachectl' }
@@ -51,31 +52,30 @@
       command: service postgresql initdb
       ignore_errors: yes
 
-    - name: replace listen_address 
-      lineinfile: 
+    - name: replace listen_address
+      lineinfile:
         path: /var/lib/pgsql/data/postgresql.conf
         state: present
         line: 'listen_addresses = "*"'
 
-    - name: Turn on XA Transaction support 
-      lineinfile: 
+    - name: Turn on XA Transaction support
+      lineinfile:
         path: /var/lib/pgsql/data/postgresql.conf
         line: 'max_prepared_transactions = 100'
-        state: present 
+        state: present
 
-    - name: Allow password auth within local network 
-      lineinfile: 
+    - name: Allow password auth within local network
+      lineinfile:
         path: /var/lib/pgsql/data/pg_hba.conf
         regexp: ''
-        insertafter: EOF 
+        insertafter: EOF
         line: "host     all     all     192.168.1.0/24  password"
 
-    - name: start postgresql 
+    - name: start postgresql
       service:
         name: postgresql
         state: started
         enabled: true
-
 
     - name: add postgres user
       become: yes
@@ -92,4 +92,3 @@
         owner: jboss
 
 #runcommand: #!/bin/sh export CLUSTER_NUM=1 /opt/jbcs-httpd/httpd/sbin/apachectl $@
-

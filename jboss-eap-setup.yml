@@ -7,22 +7,22 @@
   tasks:
     ## This is a bandaid because registering file names leads to ansible interpreting the - and . as instructions..
     - name: check if files already exist
-      stat: 
+      stat:
         path: /opt/jbcs-httpd24-2.4
       register: jbcs_httpd
 
     - name: check if files already exist
-      stat: 
+      stat:
         path: /opt/jboss-eap-7.0
       register: jboss_eap_7_0
 
     - name: check if files already exist
-      stat: 
+      stat:
         path: /opt/jboss-eap-7.0_active
       register: jboss_eap_7_0_active
 
     - name: check if files already exist
-      stat: 
+      stat:
         path: /opt/jboss-eap-7.0-passive
       register: jboss_eap_7_0_passive
 
@@ -33,7 +33,7 @@
         line: 'PasswordAuthentication no'
 
     - name: Restart sshd
-      service: 
+      service:
         name: sshd
         state: restarted
 
@@ -71,12 +71,12 @@
     - command: firewall-cmd --reload
 
     - name: install jboss apache thing
-      unarchive: 
+      unarchive:
          src: jbcs-httpd24-httpd-2.4.6-RHEL7-x86_64.zip
          dest: /opt/
       when: jbcs_httpd.stat.isdir == False
 
-    - name: Install jboss-eap to /opt/ - Then make two copies for eap clustering 
+    - name: Install jboss-eap to /opt/ - Then make two copies for eap clustering
       unarchive:
          src: jboss-eap-7.0.0.zip
          dest: /opt/
@@ -113,5 +113,3 @@
         name: httpd_can_network_connect
         state: yes
         persistent: yes
-
-
